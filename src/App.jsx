@@ -1,5 +1,5 @@
 import { Icon, ViewIcon, ViewOffIcon } from '@chakra-ui/icons';
-import { Box, Flex, Input, Menu, MenuButton, MenuItem, MenuList, Slider, SliderFilledTrack, SliderThumb, SliderTrack, Tab, TabList, TabPanel, TabPanels, Tabs, Text } from '@chakra-ui/react';
+import { Box, Flex, Input, Menu, MenuButton, MenuDivider, MenuItem, MenuList, Slider, SliderFilledTrack, SliderThumb, SliderTrack, Tab, TabList, TabPanel, TabPanels, Tabs, Text } from '@chakra-ui/react';
 import { Buffer } from 'buffer';
 import _ from 'lodash';
 import PSD from 'psd3';
@@ -204,6 +204,13 @@ function App() {
       };
       reader.readAsArrayBuffer(file);
     }
+  }
+
+  function handleDownload(format) {
+    const link = document.createElement('a');
+    link.href = canvasRef.current.toDataURL(format);
+    link.download = `canvas_image.${format === 'image/jpeg' ? 'jpg' : 'png'}`;
+    link.click();
   }
 
   const handleImageOpen = async (id) => {
@@ -441,7 +448,9 @@ function App() {
           </MenuButton>
           <MenuList>
             <MenuItem onClick={handleFileOpen}>Open PSD file</MenuItem>
-            <MenuItem>Save as...</MenuItem>
+            <MenuDivider />
+            <MenuItem onClick={() => handleDownload('image/jpeg')}>Download(*.jpg)</MenuItem>
+            <MenuItem onClick={() => handleDownload('image/png')}>Download(*.png)</MenuItem>
           </MenuList>
         </Menu>
         <Flex gap={4} align='center'>
