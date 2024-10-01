@@ -157,10 +157,10 @@ function App() {
   const parse = (layer, width, height) => {
     return layer.children().map(layer => {
       const layerInfo = layer.layer;
-      const img = layerInfo.image.length > 0 && layerInfo.image.toPng();
-      const mask = layerInfo.image.hasMask && layerInfo.image.maskToPng();
-      const imageData = img && new ImageData(new Uint8ClampedArray(img.data), img.width, img.height);
-      const maskData = mask && new ImageData(new Uint8ClampedArray(mask.data), mask.width, mask.height);
+      const img = layerInfo.image.toPng();
+      const mask = layerInfo.image.maskToPng();
+      const imageData = img && img.width > 0 && img.height > 0 && new ImageData(new Uint8ClampedArray(img.data), img.width, img.height);
+      const maskData = mask && mask.width > 0 && mask.height > 0 && new ImageData(new Uint8ClampedArray(mask.data), mask.width, mask.height);
 
       const coords = layer.coords;
       const maskCoords = layerInfo.mask;
