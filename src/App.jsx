@@ -269,11 +269,10 @@ function App() {
       imgCanvas.height = height;
       const imgCtx = imgCanvas.getContext('2d');
       if (layer.canvas) {
-        if (layer.id == selectedLayerId && M) {
+        if (layer.id == selectedLayerId && M)
           imgCtx.setTransform(M[0][0], 0, 0, M[1][1], M[0][2], M[1][2]);
-        } else {
+        else
           imgCtx.setTransform(layer.scale.x, 0, 0, layer.scale.y, layer.coords.x, layer.coords.y);
-        }
         imgCtx.drawImage(layer.canvas, 0, 0);
       }
       const mask = layer.mask;
@@ -284,9 +283,12 @@ function App() {
         imgCtx.globalCompositeOperation = 'source-over';
       }
       ctx.drawImage(imgCanvas, 0, 0);
-    } else {
-      if (layer.canvas)
-        ctx.drawImage(layer.canvas, layer.coords.x, layer.coords.y);
+    } else if (layer.canvas) {
+      if (layer.id == selectedLayerId && M)
+        ctx.setTransform(M[0][0], 0, 0, M[1][1], M[0][2], M[1][2]);
+      else
+        ctx.setTransform(layer.scale.x, 0, 0, layer.scale.y, layer.coords.x, layer.coords.y);
+      ctx.drawImage(layer.canvas, 0, 0);
     }
     ctx.globalCompositeOperation = 'source-over';
   }, [M, height, selectedLayerId, width]);
