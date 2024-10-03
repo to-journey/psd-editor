@@ -231,8 +231,8 @@ function App() {
                 image.onerror = (err) => reject(err);
               });
               const canvas = document.createElement('canvas');
-              canvas.width = width;
-              canvas.height = height;
+              canvas.width = image.width;
+              canvas.height = image.height;
               const ctx = canvas.getContext('2d');
               ctx.drawImage(image, 0, 0);
               const layer = { canvas, width: image.width, height: image.height };
