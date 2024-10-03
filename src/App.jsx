@@ -263,6 +263,7 @@ function App() {
   // Render frame
   const renderLayer = useCallback((ctx, layer) => {
     ctx.globalCompositeOperation = layer.blendMode.mode;
+    ctx.save();
     if (layer.image.hasMask) {
       const imgCanvas = document.createElement('canvas');
       imgCanvas.width = width;
@@ -280,7 +281,6 @@ function App() {
         imgCtx.globalCompositeOperation = 'destination-out';
         imgCtx.setTransform(mask.scale.x, 0, 0, mask.scale.y, mask.coords.x, mask.coords.y);
         imgCtx.drawImage(mask.canvas, 0, 0);
-        imgCtx.globalCompositeOperation = 'source-over';
       }
       ctx.drawImage(imgCanvas, 0, 0);
     } else if (layer.canvas) {
@@ -290,7 +290,7 @@ function App() {
         ctx.setTransform(layer.scale.x, 0, 0, layer.scale.y, layer.coords.x, layer.coords.y);
       ctx.drawImage(layer.canvas, 0, 0);
     }
-    ctx.globalCompositeOperation = 'source-over';
+    ctx.restore();
   }, [M, height, selectedLayerId, width]);
 
   const renderLayers = useCallback((ctx, layers) => {
