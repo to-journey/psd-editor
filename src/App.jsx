@@ -7,8 +7,6 @@ import { VscFile } from 'react-icons/vsc';
 import { v4 as uuidv4 } from 'uuid';
 import './App.css';
 
-const moveCursorMap = ['nw-resize', 'ne-resize', 'se-resize', 'sw-resize'];
-
 const findDeep = async (collection, cmpFn) => {
   return await new Promise((resolve) => {
     const _findDeep = (obj) => {
@@ -34,7 +32,7 @@ function isPointInQuadrangle(point, squarePoints) {
   const [p1, p2, p3, p4] = squarePoints;
 
   function isLeft(p1, p2, p) {
-    return (p2.x - p1.x) * (p.y - p1.y) - (p2.y - p1.y) * (p.x - p1.x) > 0;
+    return (p2[0] - p1[0]) * (p.y - p1[1]) - (p2[1] - p1[1]) * (p.x - p1[0]) > 0;
   }
 
   return (
@@ -49,40 +47,6 @@ const isPointInSquare = (point, x1, y1, x2, y2) => {
   return point.x >= x1 && point.x <= x2 && point.y >= y1 && point.y <= y2;
 }
 
-function getTransformMatrix(x, y, scaleX, scaleY) {
-  return [
-    [scaleX, 0, x],
-    [0, scaleY, y],
-    [0, 0, 1]
-  ]
-}
-
-const getTranslationMatrix = (x, y) => getTransformMatrix(x, y, 1, 1);
-const getScaleMatrix = (scaleX, scaleY) => getTransformMatrix(0, 0, scaleX, scaleY);
-
-function multiplyMatrices(A, B) {
-  const rowsA = A.length;
-  const colsA = A[0].length;
-  const rowsB = B.length;
-  const colsB = B[0].length;
-
-  if (colsA !== rowsB) {
-    throw new Error("Number of columns in A must equal number of rows in B");
-  }
-
-  const result = Array.from({ length: rowsA }, () => Array(colsB).fill(0));
-
-  for (let i = 0; i < rowsA; i++) {
-    for (let j = 0; j < colsB; j++) {
-      for (let k = 0; k < colsA; k++) {
-        result[i][j] += A[i][k] * B[k][j];
-      }
-    }
-  }
-
-  return result;
-}
-
 const strokeRect = (ctx, x1, y1, x2, y2) => {
   ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
 };
@@ -95,36 +59,74 @@ const getMousePos = (canvas, event) => {
   };
 };
 
-class Rect {
-  constructor(left, top, right, bottom) {
-    this.left = left;
-    this.top = top;
-    this.right = right;
-    this.bottom = bottom;
-  }
-
-  width() {
-    return this.right - this.left;
-  }
-
-  height() {
-    return this.bottom - this.top;
-  }
+const getScaledPoints = (points, scale) => {
+  return points.map(point => [point[0] * scale, point[1] * scale]);
 }
 
-const getTransformedPoint = (point, M) => {
-  const res = multiplyMatrices(M, [[point.x], [point.y], [1]]);
-  return { x: res[0][0], y: res[1][0] };
-}
+function create_canvas_context(w, h) {
+  var canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  var ctx = canvas.getContext('2d');
+  return ctx;
+};
 
-const getTransformedRect = (rect, M) => {
-  const points = [
-    { x: rect.left, y: rect.top },
-    { x: rect.right, y: rect.top },
-    { x: rect.right, y: rect.bottom },
-    { x: rect.left, y: rect.bottom },
-  ];
-  return points.map(point => getTransformedPoint(point, M));
+function drawPerspective(ctxd, cvso, points) {
+  if (!cvso) return;
+
+  var d0x = points[0][0];
+  var d0y = points[0][1];
+  var d1x = points[1][0];
+  var d1y = points[1][1];
+  var d2x = points[2][0];
+  var d2y = points[2][1];
+  var d3x = points[3][0];
+  var d3y = points[3][1];
+  //
+  var ow = cvso.width;
+  var oh = cvso.height;
+  //
+  var step = 16;
+  var cover_step = step * 5;
+  //
+  var ctxo = cvso.getContext('2d');;
+  var cvst = document.createElement('canvas');
+  cvst.width = ctxd.canvas.width;
+  cvst.height = ctxd.canvas.height;
+  var ctxt = cvst.getContext('2d');
+  ctxt.clearRect(0, 0, ctxt.canvas.width, ctxt.canvas.height);
+  var ctxl = create_canvas_context(ow, cover_step);
+  ctxl.globalCompositeOperation = "copy";
+  var cvsl = ctxl.canvas;
+  for (var y = 0; y < oh; y += step) {
+    var r = y / oh;
+    var sx = d0x + (d3x - d0x) * r;
+    var sy = d0y + (d3y - d0y) * r;
+    var ex = d1x + (d2x - d1x) * r;
+    var ey = d1y + (d2y - d1y) * r;
+    var ag = Math.atan((ey - sy) / (ex - sx));
+    var sc = Math.sqrt(Math.pow(ex - sx, 2) + Math.pow(ey - sy, 2)) / ow;
+    ctxl.setTransform(1, 0, 0, 1, 0, -y);
+    ctxl.drawImage(ctxo.canvas, 0, 0);
+    //
+    ctxt.translate(sx, sy);
+    ctxt.rotate(ag);
+    ctxt.scale(sc, sc);
+    ctxt.drawImage(cvsl, 0, 0);
+    //
+    ctxt.setTransform(1, 0, 0, 1, 0, 0);
+  }
+
+  ctxd.save();
+  ctxd.beginPath();
+  ctxd.moveTo(points[0][0], points[0][1]);
+  for (var i = 1; i < points.length; i++) {
+    ctxd.lineTo(points[i][0], points[i][1]);
+  }
+  ctxd.closePath();
+  ctxd.clip();
+  ctxd.drawImage(ctxt.canvas, 0, 0);
+  ctxd.restore();
 }
 
 function App() {
@@ -140,12 +142,11 @@ function App() {
 
   const [layers, setLayers] = useState([]);
   const [selectedLayerId, setSelectedLayerId] = useState();
-  const [rect, setRect] = useState();
-  const [M, setM] = useState();
-  const [isResizable, setIsResizable] = useState(0);
+  const [points, setPoints] = useState(0);
+  const [isResizable, setIsResizable] = useState(-1);
   const [isDraggable, setIsDraggable] = useState(false);
   const isDragging = useRef(false);
-  const isResizing = useRef(0);
+  const isResizing = useRef(-1);
   const startX = useRef(0);
   const startY = useRef(0);
 
@@ -173,12 +174,15 @@ function App() {
         maskCtx.putImageData(maskData, 0, 0);
       }
 
+      const coords = layer.coords;
+      const points = [[coords.left, coords.top], [coords.right, coords.top], [coords.right, coords.bottom], [coords.left, coords.bottom]];
+
       return {
         id: uuidv4(),
-        children: parse(layer),
         ...layerInfo,
-        canvas: imgCanvas, width: img.width, height: img.height, coords: { x: layer.coords.left, y: layer.coords.top }, scale: { x: 1, y: 1 },
-        mask: { canvas: maskCanvas, width: mask.width, height: mask.height, coords: { x: layerInfo.mask.left, y: layerInfo.mask.top }, scale: { x: 1, y: 1 } },
+        canvas: imgCanvas, points,
+        mask: { canvas: maskCanvas, ...layerInfo.mask },
+        children: parse(layer),
       };
     });
   }
@@ -235,7 +239,7 @@ function App() {
               canvas.height = image.height;
               const ctx = canvas.getContext('2d');
               ctx.drawImage(image, 0, 0);
-              const layer = { canvas, width: image.width, height: image.height };
+              const layer = { canvas, isImage: true, points: [[0, 0], [image.width, 0], [image.width, image.height], [0, image.height]] };
               resolve(layer);
             } catch (err) {
               reject(err);
@@ -247,51 +251,40 @@ function App() {
         imageFileRef.current.addEventListener('change', handleImageChange);
       });
       setLayerProperty(id, layer);
+      if (id == selectedLayerId)
+        setPoints(layer.points);
     }
   }
 
-  const handleSelectedLayerUpdate = useCallback(async () => {
-    const layer = await findDeep(layers, (layer) => layer.id == selectedLayerId);
-    setRect(new Rect(0, 0, layer.width, layer.height));
-    setM(getTransformMatrix(layer.coords.x, layer.coords.y, layer.scale.x, layer.scale.y));
-  }, [layers, selectedLayerId]);
-
-  useEffect(() => {
-    handleSelectedLayerUpdate();
-  }, [handleSelectedLayerUpdate]);
-
-  // Render frame
   const renderLayer = useCallback((ctx, layer) => {
-    ctx.globalCompositeOperation = layer.blendMode.mode;
     ctx.save();
+    ctx.globalCompositeOperation = layer.blendMode.mode;
+    ctx.globalAlpha = layer.opacity / 255;
     if (layer.image.hasMask) {
       const imgCanvas = document.createElement('canvas');
       imgCanvas.width = width;
       imgCanvas.height = height;
       const imgCtx = imgCanvas.getContext('2d');
-      if (layer.canvas) {
-        if (layer.id == selectedLayerId && M)
-          imgCtx.setTransform(M[0][0], 0, 0, M[1][1], M[0][2], M[1][2]);
-        else
-          imgCtx.setTransform(layer.scale.x, 0, 0, layer.scale.y, layer.coords.x, layer.coords.y);
-        imgCtx.drawImage(layer.canvas, 0, 0);
+      if (layer.isImage) {
+        drawPerspective(imgCtx, layer.canvas, layer.points);
+      } else if (layer.canvas) {
+        imgCtx.drawImage(layer.canvas, layer.points[0][0], layer.points[0][1]);
       }
       const mask = layer.mask;
       if (mask.canvas) {
         imgCtx.globalCompositeOperation = 'destination-out';
-        imgCtx.setTransform(mask.scale.x, 0, 0, mask.scale.y, mask.coords.x, mask.coords.y);
-        imgCtx.drawImage(mask.canvas, 0, 0);
+        imgCtx.drawImage(mask.canvas, mask.left, mask.top);
       }
       ctx.drawImage(imgCanvas, 0, 0);
-    } else if (layer.canvas) {
-      if (layer.id == selectedLayerId && M)
-        ctx.setTransform(M[0][0], 0, 0, M[1][1], M[0][2], M[1][2]);
-      else
-        ctx.setTransform(layer.scale.x, 0, 0, layer.scale.y, layer.coords.x, layer.coords.y);
-      ctx.drawImage(layer.canvas, 0, 0);
+    } else {
+      if (layer.isImage) {
+        drawPerspective(ctx, layer.canvas, layer.points);
+      } else if (layer.canvas) {
+        ctx.drawImage(layer.canvas, layer.points[0][0], layer.points[0][1]);
+      }
     }
     ctx.restore();
-  }, [M, height, selectedLayerId, width]);
+  }, [height, width]);
 
   const renderLayers = useCallback((ctx, layers) => {
     for (let i = layers.length - 1; i >= 0; i--) {
@@ -313,26 +306,20 @@ function App() {
   }, [layers, renderLayers]);
 
   const renderGuideLine = useCallback(async (ctx) => {
-    if (rect) {
-      ctx.strokeStyle = '#6496C8';
-
-      const layer = await findDeep(layers, (layer) => layer.id == selectedLayerId);
-      const VM = multiplyMatrices(getScaleMatrix(scale, scale), layer.id == selectedLayerId ? M : getTransformMatrix(layer.coords.x, layer.coords.y, layer.scale.x, layer.scale.y));
-
-      const points = getTransformedRect(rect, VM);
-      ctx.beginPath();
-      ctx.moveTo(points[points.length - 1].x, points[points.length - 1].y);
-      for (let i = 0; i < points.length; i++) {
-        ctx.lineTo(points[i].x, points[i].y);
-        strokeRect(ctx, points[i].x - 5, points[i].y - 5, points[i].x + 5, points[i].y + 5);
-      }
-
+    if (points) {
       ctx.lineWidth = 1;
+      ctx.strokeStyle = '#6496C8';
+      const points2 = getScaledPoints(points, scale);
+      ctx.beginPath();
+      ctx.moveTo(points2[points2.length - 1][0], points2[points2.length - 1][1]);
+      for (let i = 0; i < points2.length; i++) {
+        ctx.lineTo(points2[i][0], points2[i][1]);
+        strokeRect(ctx, points2[i][0] - 5, points2[i][1] - 5, points2[i][0] + 5, points2[i][1] + 5);
+      }
       ctx.stroke();
     }
-  }, [M, layers, rect, scale, selectedLayerId]);
+  }, [points, scale]);
 
-  // Render guide line
   useEffect(() => {
     const canvas = guideLineCanvasRef.current;
     if (!canvas) return;
@@ -355,26 +342,26 @@ function App() {
 
   const handleLayerSelect = async (event, id) => {
     event.stopPropagation();
+    const selectedLayer = await findDeep(layers, (layer) => layer.id == id);
+    setPoints(selectedLayer.points);
     setSelectedLayerId(id);
   }
 
   const isMouseInQuadrangle = useCallback((mousePos) => {
-    if (!rect) return false;
-    const VM = multiplyMatrices(getScaleMatrix(scale, scale), M);
-    const points = getTransformedRect(rect, VM);
-    return isPointInQuadrangle(mousePos, points);
-  }, [M, rect, scale]);
+    if (!points) return false;
+    const points2 = getScaledPoints(points, scale);
+    return isPointInQuadrangle(mousePos, points2);
+  }, [points, scale]);
 
   const isMouseInResizeHandle = useCallback((mousePos) => {
-    if (!rect) return -1;
-    const VM = multiplyMatrices(getScaleMatrix(scale, scale), M);
-    const points = getTransformedRect(rect, VM);
+    if (!points) return -1;
+    const points2 = getScaledPoints(points, scale);
     for (let i = 0; i < points.length; i++) {
-      if (isPointInSquare(mousePos, points[i].x - 5, points[i].y - 5, points[i].x + 5, points[i].y + 5))
+      if (isPointInSquare(mousePos, points2[i][0] - 5, points2[i][1] - 5, points2[i][0] + 5, points2[i][1] + 5))
         return i;
     }
-    return 0;
-  }, [M, rect, scale]);
+    return -1;
+  }, [points, scale]);
 
   const handleMouseDown = useCallback((event) => {
     const canvas = canvasRef.current;
@@ -383,7 +370,7 @@ function App() {
     startX.current = mousePos.x;
     startY.current = mousePos.y;
     isResizing.current = isMouseInResizeHandle(mousePos);
-    isDragging.current = isResizing.current <= 0 && isMouseInQuadrangle(mousePos);
+    isDragging.current = isResizing.current < 0 && isMouseInQuadrangle(mousePos);
   }, [isMouseInQuadrangle, isMouseInResizeHandle]);
 
   const handleMouseMove = useCallback(async (event) => {
@@ -398,19 +385,20 @@ function App() {
       const deltaX = (mousePos.x - startX.current) / scale;
       const deltaY = (mousePos.y - startY.current) / scale;
       const selectedLayer = await findDeep(layers, (layer) => layer.id == selectedLayerId);
-      setM(multiplyMatrices(getTranslationMatrix(deltaX, deltaY), getTransformMatrix(selectedLayer.coords.x, selectedLayer.coords.y, selectedLayer.scale.x, selectedLayer.scale.y)));
+      setPoints(selectedLayer.points.map(point => [point[0] + deltaX, point[1] + deltaY]));
     }
 
-    if (isResizing.current > 0) {
-      const points = getTransformedRect(rect, getScaleMatrix(scale, scale));
-      const point = points[isResizing.current];
+    if (isResizing.current >= 0) {
+      const deltaX = (mousePos.x - startX.current) / scale;
+      const deltaY = (mousePos.y - startY.current) / scale;
       const selectedLayer = await findDeep(layers, (layer) => layer.id == selectedLayerId);
-      const originalPoint = { x: selectedLayer.coords.x * scale, y: selectedLayer.coords.y * scale };
-      const scaleX = isResizing.current == 0 || isResizing.current == 3 ? M[0][0] : ((mousePos.x - originalPoint.x) / point.x);
-      const scaleY = isResizing.current == 0 || isResizing.current == 1 ? M[1][1] : ((mousePos.y - originalPoint.y) / point.y);
-      setM(getTransformMatrix(selectedLayer.coords.x, selectedLayer.coords.y, scaleX, scaleY));
+      setPoints(selectedLayer.points.map((point, index) => {
+        if (index == isResizing.current)
+          return [point[0] + deltaX, point[1] + deltaY];
+        return point;
+      }));
     }
-  }, [M, isMouseInQuadrangle, isMouseInResizeHandle, layers, rect, scale, selectedLayerId]);
+  }, [isMouseInQuadrangle, isMouseInResizeHandle, layers, scale, selectedLayerId]);
 
   const handleMouseUp = useCallback(async (event) => {
     const canvas = canvasRef.current;
@@ -421,22 +409,25 @@ function App() {
       const deltaX = (mousePos.x - startX.current) / scale;
       const deltaY = (mousePos.y - startY.current) / scale;
       const selectedLayer = await findDeep(layers, (layer) => layer.id == selectedLayerId);
-      setLayerProperty(selectedLayerId, { coords: { x: selectedLayer.coords.x + deltaX, y: selectedLayer.coords.y + deltaY } });
+      setLayerProperty(selectedLayerId, { points: selectedLayer.points.map(point => [point[0] + deltaX, point[1] + deltaY]) });
     }
 
-    if (isResizing.current > 0) {
-      const points = getTransformedRect(rect, getScaleMatrix(scale, scale));
-      const point = points[isResizing.current];
+    if (isResizing.current >= 0) {
+      const deltaX = (mousePos.x - startX.current) / scale;
+      const deltaY = (mousePos.y - startY.current) / scale;
       const selectedLayer = await findDeep(layers, (layer) => layer.id == selectedLayerId);
-      const originalPoint = { x: selectedLayer.coords.x * scale, y: selectedLayer.coords.y * scale };
-      const scaleX = isResizing.current == 0 || isResizing.current == 3 ? M[0][0] : ((mousePos.x - originalPoint.x) / point.x);
-      const scaleY = isResizing.current == 0 || isResizing.current == 1 ? M[1][1] : ((mousePos.y - originalPoint.y) / point.y);
-      setLayerProperty(selectedLayerId, { scale: { x: scaleX, y: scaleY } });
+      setLayerProperty(selectedLayerId, {
+        points: selectedLayer.points.map((point, index) => {
+          if (index == isResizing.current)
+            return [point[0] + deltaX, point[1] + deltaY];
+          return point;
+        })
+      });
     }
 
     isDragging.current = false;
-    isResizing.current = 0;
-  }, [M, layers, rect, scale, selectedLayerId, setLayerProperty]);
+    isResizing.current = -1;
+  }, [layers, scale, selectedLayerId, setLayerProperty]);
 
   const Layers = ({ layers }) => {
     return layers.map((layer) => (
@@ -448,7 +439,10 @@ function App() {
           <Flex flexGrow={1} px={4} py={2} align='center'>
             <Flex w='full' justify='space-between' align='center'>
               <Text>{layer.legacyName}</Text>
-              {layer.children.length == 0 && <Icon flex='none' as={VscFile} cursor='pointer' onClick={() => handleImageOpen(layer.id)} />}
+              {layer.children.length == 0 && <Icon flex='none' as={VscFile} cursor='pointer' onClick={(e) => {
+                e.stopPropagation();
+                handleImageOpen(layer.id);
+              }} />}
             </Flex>
           </Flex>
           <Flex direction='column'>
@@ -496,7 +490,7 @@ function App() {
               width={width * scale} height={scale * height}
               style={{
                 position: 'absolute', left: 0, top: 0, width: '100%', height: '100%',
-                cursor: isResizable > 0 ? moveCursorMap[isResizable] : isDraggable ? 'move' : 'default'
+                cursor: isResizable >= 0 ? 'crosshair' : isDraggable ? 'move' : 'default'
               }}
               onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}
             />
