@@ -86,7 +86,7 @@ function drawPerspective(ctxd, cvso, points) {
   var ow = cvso.width;
   var oh = cvso.height;
   //
-  var step = 16;
+  var step = 8;
   var cover_step = step * 5;
   //
   var ctxo = cvso.getContext('2d');;
